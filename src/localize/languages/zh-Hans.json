@@ -1,0 +1,57 @@
+{
+  "card_name": "毫米波雷达校准卡片",
+  "tabs": { "geo": "① 几何 & 边界", "yaw": "② 偏航校准", "live": "③ 实时验证" },
+  "geo": {
+    "install_params": "安装参数（卷尺测量后填入）",
+    "radar_x": "雷达 X", "radar_y": "雷达 Y", "radar_height": "安装高度",
+    "yaw_rough": "粗略偏航", "pitch": "俯仰角", "roll": "横滚角",
+    "geo_note": "坐标原点为房间左下角，X 向右，Y 向前。\n偏航角 = 雷达正前方相对房间 Y 轴的夹角，顺时针为正。\nPitch/Roll：可手动填写，或接入 IMU 传感器后自动读取。",
+    "boundary": "房间边界过滤（可选）",
+    "poly_hint_none": "点击画布添加顶点，绘制有效区域（≥ 3 个点）",
+    "poly_hint_ok": "边界过滤已启用 — {n} 个顶点",
+    "poly_undo": "撤销", "poly_clear": "清除",
+    "boundary_note": "不绘制边界 = 不过滤。绘制后，落在多边形外的目标将被忽略。"
+  },
+  "yaw": {
+    "ref_a_title": "参考点 A", "ref_b_title": "参考点 B",
+    "ref_a_idle": "在预览图上点击一个你能走到的已知位置",
+    "ref_a_marked": "已标记 → 走到该位置后点击「捕获」",
+    "ref_a_done": "捕获完成",
+    "ref_b_idle": "完成 A 点后操作",
+    "ref_b_step": "点击另一个已知位置（与 A 距离 > 80 cm）",
+    "ref_b_marked": "已标记 → 走到该位置后点击「捕获」",
+    "ref_b_done": "捕获完成",
+    "capture_btn": "走到标记位置后 → 点此捕获雷达读数",
+    "capture_wait": "等待雷达数据…",
+    "result_idle": "在预览图上点击参考点 A 开始校准",
+    "result_ok": "偏航角 {yaw}° · 残差 {residual} cm"
+  },
+  "live": {
+    "title": "房间俯视图",
+    "badge_none": "无人", "badge_present": "有人", "badge_filtered": "边界外",
+    "room_x": "房间 X (cm)", "room_y": "房间 Y (cm)", "height": "离地高度 (cm)", "targets": "目标数"
+  },
+  "actions": {
+    "save": "保存", "saved": "已保存 ✓",
+    "reset": "重置", "reset_confirm": "清除所有校准数据？"
+  },
+  "editor": {
+    "model": "雷达型号",
+    "entities": "实体配置",
+    "presence_entity": "存在感知实体",
+    "x_entity": "X 坐标实体",
+    "y_entity": "Y 坐标实体",
+    "z_entity": "Z 坐标实体（可选）",
+    "breath_entity": "呼吸频率实体（可选）",
+    "heart_entity": "心率实体（可选）",
+    "sleep_entity": "睡眠状态实体（可选）",
+    "target1_x": "目标 1 X 实体",
+    "target1_y": "目标 1 Y 实体",
+    "target2_x": "目标 2 X 实体（可选）",
+    "target2_y": "目标 2 Y 实体（可选）",
+    "target3_x": "目标 3 X 实体（可选）",
+    "target3_y": "目标 3 Y 实体（可选）",
+    "room_dimensions": "房间尺寸",
+    "room_w": "房间宽度 (cm)", "room_d": "房间深度 (cm)"
+  }
+}

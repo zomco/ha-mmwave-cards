@@ -1,8 +1,57 @@
 {
-  "common": {
-    "version": "Version",
-    "invalid_configuration": "Invalid configuration",
-    "show_warning": "Show Warning",
-    "show_error": "Show Error"
+  "card_name": "MMWave Radar Card",
+  "tabs": { "geo": "① Geometry & Boundary", "yaw": "② Yaw Calibration", "live": "③ Live View" },
+  "geo": {
+    "install_params": "Installation Parameters (measure with tape)",
+    "radar_x": "Radar X", "radar_y": "Radar Y", "radar_height": "Height",
+    "yaw_rough": "Rough Yaw", "pitch": "Pitch", "roll": "Roll",
+    "geo_note": "Origin: room bottom-left, X→right, Y→forward.\nYaw = radar forward axis vs room Y-axis (clockwise+).\nPitch/Roll: manual entry or from IMU sensor.",
+    "boundary": "Room Boundary (optional)",
+    "poly_hint_none": "Click canvas to draw boundary (≥ 3 points)",
+    "poly_hint_ok": "Boundary active — {n} vertices",
+    "poly_undo": "Undo", "poly_clear": "Clear",
+    "boundary_note": "No boundary = no filtering. Targets outside the polygon are ignored."
+  },
+  "yaw": {
+    "ref_a_title": "Reference Point A", "ref_b_title": "Reference Point B",
+    "ref_a_idle": "Click the preview to mark a known position",
+    "ref_a_marked": "Marked — walk there, then Capture",
+    "ref_a_done": "Captured",
+    "ref_b_idle": "Complete point A first",
+    "ref_b_step": "Click another known position (> 80 cm from A)",
+    "ref_b_marked": "Marked — walk there, then Capture",
+    "ref_b_done": "Captured",
+    "capture_btn": "Walk to marked position → Capture radar reading",
+    "capture_wait": "Waiting for radar data…",
+    "result_idle": "Click the preview map to start — mark reference point A",
+    "result_ok": "Yaw {yaw}° · Residual {residual} cm"
+  },
+  "live": {
+    "title": "Room Top-Down View",
+    "badge_none": "No presence", "badge_present": "Present", "badge_filtered": "Outside boundary",
+    "room_x": "Room X (cm)", "room_y": "Room Y (cm)", "height": "Height (cm)", "targets": "Targets"
+  },
+  "actions": {
+    "save": "Save", "saved": "Saved ✓",
+    "reset": "Reset", "reset_confirm": "Clear all calibration data?"
+  },
+  "editor": {
+    "model": "Radar model",
+    "entities": "Entities",
+    "presence_entity": "Presence entity",
+    "x_entity": "X coordinate entity",
+    "y_entity": "Y coordinate entity",
+    "z_entity": "Z coordinate entity (optional)",
+    "breath_entity": "Breathing rate entity (optional)",
+    "heart_entity": "Heart rate entity (optional)",
+    "sleep_entity": "Sleep state entity (optional)",
+    "target1_x": "Target 1 X entity",
+    "target1_y": "Target 1 Y entity",
+    "target2_x": "Target 2 X entity (optional)",
+    "target2_y": "Target 2 Y entity (optional)",
+    "target3_x": "Target 3 X entity (optional)",
+    "target3_y": "Target 3 Y entity (optional)",
+    "room_dimensions": "Room Dimensions",
+    "room_w": "Room width (cm)", "room_d": "Room depth (cm)"
   }
 }

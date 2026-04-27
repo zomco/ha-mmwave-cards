@@ -1,0 +1,147 @@
+/**
+ * Shared types used across the card, all panels, and model adapters.
+ * Model-specific types live in src/models/<model>/types.ts.
+ */
+
+import type { LovelaceCardConfig, ActionConfig } from "custom-card-helpers";
+
+// ── Geometry ──────────────────────────────────────────────────────────────────
+
+export interface Vec2 { x: number; y: number }
+
+// ── Calibration ───────────────────────────────────────────────────────────────
+
+export interface CalibrationConfig {
+  /** Radar installation position in room coordinate system (cm). */
+  radar_x: number;
+  radar_y: number;
+  /** Radar installation height above floor (cm). */
+  radar_height: number;
+  /** Yaw angle: deviation of radar forward axis from room Y-axis, clockwise positive (°). */
+  yaw: number;
+  /** Pitch angle: forward tilt, positive = tilted forward (°). */
+  pitch: number;
+  /** Roll angle: sideways tilt, positive = tilted right (°). */
+  roll: number;
+  /** Room boundary polygon in room coordinate system (cm). Empty = no filtering. */
+  polygon: Vec2[];
+}
+
+export const DEFAULT_CALIBRATION: CalibrationConfig = {
+  radar_x: 0, radar_y: 0, radar_height: 220,
+  yaw: 0, pitch: 0, roll: 0,
+  polygon: [],
+};
+
+// ── Coordinate transform result ───────────────────────────────────────────────
+
+export interface TransformResult {
+  roomX: number;
+  roomY: number;
+  /** Target height above floor (cm). Only meaningful when radar has Z axis. */
+  heightFloor: number;
+  /** Whether the target is inside the room boundary polygon. */
+  inBoundary: boolean;
+}
+
+// ── Radar reading (model-agnostic) ────────────────────────────────────────────
+
+export interface RadarTarget {
+  /** Zero-based index (always 0 for single-target models). */
+  index: number;
+  /** Raw coordinates in radar local coordinate system (cm). */
+  rawX: number;
+  rawY: number;
+  /** Raw Z; 0 when the model has no Z axis. */
+  rawZ: number;
+  /** Radial speed (cm/s); undefined when not reported. */
+  speed?: number;
+  /** Transformed room coordinates (populated by the card after calibration). */
+  room?: TransformResult;
+}
+
+export interface RadarReading {
+  present: boolean;
+  targets: RadarTarget[];
+}
+
+// ── Model capabilities ────────────────────────────────────────────────────────
+
+export interface RadarModelInfo {
+  /** Unique identifier used in the card YAML config. */
+  id: string;
+  /** Human-readable name shown in the editor drop-down. */
+  displayName: string;
+  /** Horizontal field-of-view (degrees). */
+  fovDegrees: number;
+  /** Maximum detection range (m). */
+  maxRangeM: number;
+  /** Effective position update rate (Hz). Used for trail sizing. */
+  updateRateHz: number;
+  /** Maximum simultaneous targets reported. */
+  maxTargets: number;
+  /** Whether the model outputs a Z coordinate. */
+  hasZAxis: boolean;
+  /** Whether the model outputs breathing rate. */
+  hasBreathing: boolean;
+  /** Whether the model outputs heart rate. */
+  hasHeartRate: boolean;
+  /** Whether the model outputs sleep monitoring data. */
+  hasSleep: boolean;
+}
+
+// ── Entity schema (for the visual editor) ────────────────────────────────────
+
+export interface EntitySchemaField {
+  /** Config key (e.g. "presence_entity"). */
+  key: string;
+  /** i18n key for the label (e.g. "editor.presence_entity"). */
+  labelKey: string;
+  required: boolean;
+  /** HA entity domain hint for the picker. */
+  domain?: string;
+}
+
+// ── Card-level Lovelace config ────────────────────────────────────────────────
+
+export interface MMWaveCardConfig extends LovelaceCardConfig {
+  /**
+   * Radar model identifier.
+   * Must match a key in the model registry (src/models/index.ts).
+   */
+  radar_model: string;
+  /** Room width for canvas scaling (cm). */
+  room_w: number;
+  /** Room depth for canvas scaling (cm). */
+  room_d: number;
+  /** Any entity IDs needed by the selected model. */
+  [key: string]: unknown;
+  tap_action?: ActionConfig;
+}
+
+export const DEFAULT_CARD_CONFIG: Partial<MMWaveCardConfig> = {
+  room_w: 400,
+  room_d: 350,
+};
+
+// ── Yaw calibration sub-state ─────────────────────────────────────────────────
+
+export interface RefPoint {
+  canvasPt: Vec2;
+  detPt?: Vec2;
+}
+
+export interface YawCalibState {
+  /**
+   * 0   = waiting to mark A on canvas
+   * 0.5 = A marked, waiting to capture
+   * 1   = A captured, waiting to mark B
+   * 1.5 = B marked, waiting to capture
+   * 2   = complete
+   */
+  sub: number;
+  refA?: RefPoint;
+  refB?: RefPoint;
+  capturing: boolean;
+  residual?: number;
+}
