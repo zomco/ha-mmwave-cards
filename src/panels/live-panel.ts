@@ -49,14 +49,18 @@ export class LivePanel extends LitElement {
   public clearTrail() { this._trail = []; }
 
   private _m(): CanvasMetrics {
-    return { W: this._cv?.offsetWidth ?? 400, H: 210, roomW: this.roomW, roomD: this.roomD };
+    const cv  = this._cv;
+    const W   = cv?.offsetWidth ?? 400;
+    const ratio = this.roomD / this.roomW;
+    const H   = Math.max(150, Math.min(300, Math.round(W * ratio)));
+    return { W, H, roomW: this.roomW, roomD: this.roomD };
   }
 
   private _draw() {
     const cv = this._cv;
     if (cv) {
-      const ctx = setupCanvas(cv, 210);
       const m   = this._m();
+      const ctx = setupCanvas(cv, m.H);
       drawBase(ctx, m);
       drawPolygon(ctx, this.calibration.polygon, m);
 

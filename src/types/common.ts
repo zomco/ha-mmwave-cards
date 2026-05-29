@@ -128,7 +128,10 @@ export const DEFAULT_CARD_CONFIG: Partial<MMWaveCardConfig> = {
 
 export interface RefPoint {
   canvasPt: Vec2;
+  /** 捕获时雷达输出的原始坐标（cm，雷达局部坐标系） */
   detPt?: Vec2;
+  /** 点击时对应的房间坐标（cm），用于在 UI 中显示给用户 */
+  roomPt?: Vec2;
 }
 
 export interface YawCalibState {

@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
-import type { CalibrationConfig, YawCalibState } from "../types";
+import type { CalibrationConfig, Vec2, YawCalibState } from "../types";
 import type { RadarModelAdapter } from "../models";
 import {
   setupCanvas, drawBase, drawPolygon, drawRadarIcon, drawDot,
@@ -14,7 +14,6 @@ export class YawPanel extends LitElement {
   @property({ attribute: false }) adapter!: RadarModelAdapter;
   @property({ attribute: false }) calibration!: CalibrationConfig;
   @property({ attribute: false }) lang = "en";
-  /** Room dimensions (cm) — needed for canvas ↔ room coordinate conversion. */
   @property({ type: Number }) roomW = 400;
   @property({ type: Number }) roomD = 350;
 
@@ -31,7 +30,15 @@ export class YawPanel extends LitElement {
   }
   disconnectedCallback() { super.disconnectedCallback(); cancelAnimationFrame(this._rafId); }
 
-  // ── public API called by the card when a new radar reading arrives ────────
+  // ── canvas height: proportional to room aspect ratio ─────────────────────
+
+  private _canvasH(cv: HTMLCanvasElement): number {
+    const W     = cv.offsetWidth || 400;
+    const ratio = this.roomD / this.roomW;
+    return Math.max(130, Math.min(240, Math.round(W * ratio)));
+  }
+
+  // ── public API ────────────────────────────────────────────────────────────
 
   public offerReading(rawX: number, rawY: number): void {
     if (!this._yw.capturing) return;
@@ -39,25 +46,33 @@ export class YawPanel extends LitElement {
     this._yw = { ...this._yw, capturing: false };
   }
 
-  // ── canvas interaction ────────────────────────────────────────────────────
+  // ── canvas metrics ────────────────────────────────────────────────────────
 
   private _m(): CanvasMetrics {
-    const cv = this._cv;
-    return { W: cv?.offsetWidth ?? 400, H: 155, roomW: this.roomW, roomD: this.roomD };
+    const cv  = this._cv;
+    const W   = cv?.offsetWidth ?? 400;
+    const H   = cv ? this._canvasH(cv) : 200;
+    return { W, H, roomW: this.roomW, roomD: this.roomD };
   }
 
+  // ── canvas interaction ────────────────────────────────────────────────────
+
   private _onCanvasClick(e: MouseEvent) {
-    const cv = this._cv; if (!cv) return;
-    const yw = this._yw;
+    const cv  = this._cv; if (!cv) return;
+    const yw  = this._yw;
     if (yw.sub !== 0 && yw.sub !== 1) return;
+
     const dpr = window.devicePixelRatio || 1;
     const raw = eventToCanvasPt(e, cv);
     const pt  = { x: raw.x / dpr, y: raw.y / dpr };
+    const m   = this._m();
+    // 计算该点对应的房间坐标，供 UI 显示给用户
+    const roomPt = canvasToRoom(pt.x, pt.y, m);
 
     if (yw.sub === 0) {
-      this._yw = { ...yw, refA: { canvasPt: pt }, sub: 0.5 };
+      this._yw = { ...yw, refA: { canvasPt: pt, roomPt }, sub: 0.5 };
     } else {
-      this._yw = { ...yw, refB: { canvasPt: pt }, sub: 1.5 };
+      this._yw = { ...yw, refB: { canvasPt: pt, roomPt }, sub: 1.5 };
     }
     this.requestUpdate();
   }
@@ -80,27 +95,29 @@ export class YawPanel extends LitElement {
   private _computeYaw() {
     const yw = this._yw;
     if (!yw.refA?.detPt || !yw.refB?.detPt) return;
-    const m = this._m();
+    const m    = this._m();
     const mapA = canvasToRoom(yw.refA.canvasPt.x, yw.refA.canvasPt.y, m);
     const mapB = canvasToRoom(yw.refB.canvasPt.x, yw.refB.canvasPt.y, m);
     const detA = yw.refA.detPt, detB = yw.refB.detPt;
-    const newYaw  = calcYawFromTwoPoints(mapA, mapB, detA, detB);
-    const updCal  = { ...this.calibration, yaw: newYaw };
+    const newYaw   = calcYawFromTwoPoints(mapA, mapB, detA, detB);
+    const updCal   = { ...this.calibration, yaw: newYaw };
     const residual = calcCalibrationResidual(mapA, mapB, detA, detB, updCal);
     this._yw = { ...this._yw, residual };
     this.dispatchEvent(new CustomEvent("calibration-changed",
       { detail: updCal, bubbles: true, composed: true }));
   }
 
-  // ── canvas draw ────────────────────────────────────────────────────────────
+  // ── canvas draw ───────────────────────────────────────────────────────────
 
   private _draw() {
     const cv = this._cv;
     if (cv) {
-      const ctx = setupCanvas(cv, 155);
-      const m   = this._m();
+      const cssH = this._canvasH(cv);
+      const ctx  = setupCanvas(cv, cssH);
+      const m    = this._m();
       drawBase(ctx, m);
       drawPolygon(ctx, this.calibration.polygon, m, true);
+
       const rp = roomToCanvas(this.calibration.radar_x, this.calibration.radar_y, m);
       drawRadarIcon(ctx, rp.cx, rp.cy, this.calibration.yaw, this.adapter.info.fovDegrees);
 
@@ -122,19 +139,34 @@ export class YawPanel extends LitElement {
     this._rafId = requestAnimationFrame(() => this._draw());
   }
 
-  // ── render ─────────────────────────────────────────────────────────────────
+  // ── helpers ───────────────────────────────────────────────────────────────
+
+  /** 格式化坐标字符串，插入 {x} / {y} 占位符 */
+  private _fmtCoord(template: string, pt: Vec2): string {
+    return template
+      .replace("{x}", String(Math.round(pt.x)))
+      .replace("{y}", String(Math.round(pt.y)));
+  }
 
   private _refStep(step: 0 | 1) {
     const yw  = this._yw;
-    // Normalise sub relative to this step (step 0 uses sub as-is; step 1 uses sub-1)
     const rel = step === 0 ? yw.sub : yw.sub - 1;
     const cls = rel >= 1 ? "done" : rel >= 0 ? "act" : "";
     const isA = step === 0;
-    const sub =
-      rel >= 1    ? this._L(isA ? "yaw.ref_a_done"   : "yaw.ref_b_done") :
-      rel === 0.5 ? this._L(isA ? "yaw.ref_a_marked" : "yaw.ref_b_marked") :
-      rel === 0   ? this._L(isA ? "yaw.ref_a_idle"   : "yaw.ref_b_step") :
-                    this._L("yaw.ref_b_idle");
+    const ref = isA ? yw.refA : yw.refB;
+
+    let sub: string;
+    if (rel >= 1) {
+      sub = this._L(isA ? "yaw.ref_a_done" : "yaw.ref_b_done");
+    } else if (rel === 0.5) {
+      // 已点击，显示房间坐标
+      const tmpl = this._L(isA ? "yaw.ref_a_marked" : "yaw.ref_b_marked");
+      sub = ref?.roomPt ? this._fmtCoord(tmpl, ref.roomPt) : tmpl;
+    } else if (rel === 0) {
+      sub = this._L(isA ? "yaw.ref_a_idle" : "yaw.ref_b_step");
+    } else {
+      sub = this._L("yaw.ref_b_idle");
+    }
 
     return html`
       <div class="ref-step ${cls}">
@@ -145,6 +177,8 @@ export class YawPanel extends LitElement {
         </div>
       </div>`;
   }
+
+  // ── render ────────────────────────────────────────────────────────────────
 
   protected render() {
     const yw     = this._yw;

@@ -4,7 +4,7 @@ import type { CalibrationConfig } from "../types";
 import type { RadarModelAdapter } from "../models";
 import {
   setupCanvas, drawBase, drawPolygon,
-  eventToCanvasPt,
+  canvasToRoom, eventToCanvasPt,
   type CanvasMetrics,
 } from "../utils/canvas";
 import { localize } from "../localize/localize";
@@ -14,6 +14,9 @@ export class GeoPanel extends LitElement {
   @property({ attribute: false }) adapter!: RadarModelAdapter;
   @property({ attribute: false }) calibration!: CalibrationConfig;
   @property({ attribute: false }) lang = "en";
+  /** Room dimensions (cm) — needed for aspect-ratio canvas. */
+  @property({ type: Number }) roomW = 400;
+  @property({ type: Number }) roomD = 350;
 
   @query("#poly-cv") private _cv?: HTMLCanvasElement;
   private _rafId = 0;
@@ -26,44 +29,58 @@ export class GeoPanel extends LitElement {
   }
   disconnectedCallback() { super.disconnectedCallback(); cancelAnimationFrame(this._rafId); }
 
-  // ── emit calibration-changed ───────────────────────────────────────────────
+  // ── canvas height: proportional to room aspect ratio, capped ─────────────
+
+  private _canvasH(cv: HTMLCanvasElement): number {
+    const W     = cv.offsetWidth || 400;
+    const ratio = this.roomD / this.roomW;
+    return Math.max(130, Math.min(260, Math.round(W * ratio)));
+  }
+
+  // ── emit calibration-changed ──────────────────────────────────────────────
 
   private _emit(patch: Partial<CalibrationConfig>) {
     this.dispatchEvent(new CustomEvent("calibration-changed",
       { detail: { ...this.calibration, ...patch }, bubbles: true, composed: true }));
   }
 
-  // ── polygon interactions ───────────────────────────────────────────────────
+  // ── polygon interactions ──────────────────────────────────────────────────
 
   private _onCanvasClick(e: MouseEvent) {
     const cv = this._cv; if (!cv) return;
-    const pt = eventToCanvasPt(e, cv);
+    const raw = eventToCanvasPt(e, cv);
     const dpr = window.devicePixelRatio || 1;
-    this.dispatchEvent(new CustomEvent("polygon-point-added",
-      { detail: { canvasX: pt.x / dpr, canvasY: pt.y / dpr }, bubbles: true, composed: true }));
+    const pt  = { x: raw.x / dpr, y: raw.y / dpr };
+    const H   = this._canvasH(cv);
+    const m: CanvasMetrics = {
+      W: cv.offsetWidth || 400, H,
+      roomW: this.roomW, roomD: this.roomD,
+    };
+    const roomPt = canvasToRoom(pt.x, pt.y, m);
+    this._emit({ polygon: [...this.calibration.polygon, roomPt] });
   }
 
   private _undo()  { const p = [...this.calibration.polygon]; p.pop();   this._emit({ polygon: p }); }
   private _clear() { this._emit({ polygon: [] }); }
 
-  // ── canvas draw ────────────────────────────────────────────────────────────
+  // ── canvas draw ───────────────────────────────────────────────────────────
 
   private _draw() {
     const cv = this._cv;
     if (cv) {
-      // room dimensions are stored on the element by the card (as data attributes)
-      const roomW = parseFloat(cv.dataset.roomW ?? "400");
-      const roomD = parseFloat(cv.dataset.roomD ?? "350");
-      const cssH  = 165;
-      const ctx   = setupCanvas(cv, cssH);
-      const m: CanvasMetrics = { W: cv.offsetWidth || 400, H: cssH, roomW, roomD };
+      const cssH = this._canvasH(cv);
+      const ctx  = setupCanvas(cv, cssH);
+      const m: CanvasMetrics = {
+        W: cv.offsetWidth || 400, H: cssH,
+        roomW: this.roomW, roomD: this.roomD,
+      };
       drawBase(ctx, m);
       drawPolygon(ctx, this.calibration.polygon, m);
     }
     this._rafId = requestAnimationFrame(() => this._draw());
   }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+  // ── helpers ───────────────────────────────────────────────────────────────
 
   private _numField(label: string, key: keyof CalibrationConfig, value: number, step = 5, min = -9999) {
     return html`
@@ -91,7 +108,7 @@ export class GeoPanel extends LitElement {
       </div>`;
   }
 
-  // ── render ─────────────────────────────────────────────────────────────────
+  // ── render ────────────────────────────────────────────────────────────────
 
   protected render() {
     const c  = this.calibration;
