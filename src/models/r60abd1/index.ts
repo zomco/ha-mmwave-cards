@@ -28,8 +28,10 @@ import { DEFAULT_CALIBRATION } from "../../types";
 const INFO: RadarModelInfo = {
   id:           "r60abd1",
   displayName:  "MicRadar R60ABD1 (60 GHz)",
-  fovDegrees:   40,    // 手册 §5.4：水平 ±20°，垂直 ±20°，总 FOV 40°
-  maxRangeM:    2.5,   // 手册 §6.2：睡眠/存在探测最大距离 2.5 m
+  fovDegrees:   40,      // 手册 §5.4：±20°
+  maxRangeM:    2.5,     // 手册 §6.2：存在/睡眠探测最大距离
+  minRangeM:    0.4,     // 手册 §5.1：最小探测距离（盲区）
+  vitalRangeM:  1.5,     // 手册 §6.2：呼吸/心率探测最大距离
   updateRateHz: 0.5,   // 2 s between position frames
   maxTargets:   1,
   hasZAxis:     true,

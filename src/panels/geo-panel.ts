@@ -3,8 +3,8 @@ import { customElement, property, query } from "lit/decorators.js";
 import type { CalibrationConfig } from "../types";
 import type { RadarModelAdapter } from "../models";
 import {
-  setupCanvas, drawBase, drawPolygon,
-  canvasToRoom, eventToCanvasCssPt,
+  setupCanvas, drawBase, drawPolygon, drawRadarFov,
+  roomToCanvas, canvasToRoom, eventToCanvasCssPt,
   type CanvasMetrics,
 } from "../utils/canvas";
 import { localize } from "../localize/localize";
@@ -67,6 +67,14 @@ export class GeoPanel extends LitElement {
       const ctx  = setupCanvas(cv, cssH);
       const m    = this._m();
       drawBase(ctx, m);
+      // Draw radar FOV first (underneath polygon)
+      if (this.adapter) {
+        const rp = roomToCanvas(this.calibration.radar_x, this.calibration.radar_y, m);
+        drawRadarFov(ctx, rp.cx, rp.cy, this.calibration.yaw,
+          this.adapter.info.fovDegrees,
+          this.adapter.info.minRangeM, this.adapter.info.maxRangeM, m,
+          this.adapter.info.vitalRangeM);
+      }
       drawPolygon(ctx, this.calibration.polygon, m);
     }
     this._rafId = requestAnimationFrame(() => this._loop());

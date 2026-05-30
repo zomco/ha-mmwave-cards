@@ -76,6 +76,18 @@ export interface RadarModelInfo {
   fovDegrees: number;
   /** Maximum detection range (m). */
   maxRangeM: number;
+  /**
+   * Minimum detection range (m) — blind zone, targets closer are not detected.
+   * R60ABD1: 0.4 m (§5.1).
+   */
+  minRangeM: number;
+  /**
+   * Inner boundary for vital-sign (breath / heart rate) detection (m).
+   * Targets beyond this but within maxRangeM can still be detected for
+   * presence/sleep. Set to undefined if the model has only one range.
+   * R60ABD1: 1.5 m breath/HR vs 2.5 m presence/sleep (§6.2).
+   */
+  vitalRangeM?: number;
   /** Effective position update rate (Hz). Used for trail sizing. */
   updateRateHz: number;
   /** Maximum simultaneous targets reported. */

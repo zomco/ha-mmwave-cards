@@ -3,7 +3,7 @@ import { customElement, property, query, state } from "lit/decorators.js";
 import type { CalibrationConfig, Vec2, YawCalibState } from "../types";
 import type { RadarModelAdapter } from "../models";
 import {
-  setupCanvas, drawBase, drawPolygon, drawRadarIcon, drawDot,
+  setupCanvas, drawBase, drawPolygon, drawRadarFov, drawDot,
   roomToCanvas, canvasToRoom, eventToCanvasCssPt,
   type CanvasMetrics,
 } from "../utils/canvas";
@@ -114,7 +114,9 @@ export class YawPanel extends LitElement {
 
       const rp = roomToCanvas(this.calibration.radar_x, this.calibration.radar_y, m);
       // Pass adapter.info.fovDegrees explicitly — R60ABD1 = 40°
-      drawRadarIcon(ctx, rp.cx, rp.cy, this.calibration.yaw, this.adapter.info.fovDegrees);
+      drawRadarFov(ctx, rp.cx, rp.cy, this.calibration.yaw, this.adapter.info.fovDegrees,
+          this.adapter.info.minRangeM, this.adapter.info.maxRangeM, m,
+          this.adapter.info.vitalRangeM);
 
       const drawRef = (ref: typeof this._yw.refA, label: string) => {
         if (!ref) return;

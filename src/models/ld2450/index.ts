@@ -35,6 +35,7 @@ const INFO: RadarModelInfo = {
   displayName:  "Hi-Link LD2450 (24 GHz)",
   fovDegrees:   120,
   maxRangeM:    6,
+  minRangeM:    0.2,   // LD2450 typical blind zone ~20 cm
   updateRateHz: 20,
   maxTargets:   3,
   hasZAxis:     false,

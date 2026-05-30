@@ -3,7 +3,7 @@ import { customElement, property, query } from "lit/decorators.js";
 import type { CalibrationConfig, RadarTarget, TransformResult } from "../types";
 import type { RadarModelAdapter } from "../models";
 import {
-  setupCanvas, drawBase, drawPolygon, drawRadarIcon, drawTarget,
+  setupCanvas, drawBase, drawPolygon, drawRadarFov, drawTarget,
   roomToCanvas, type CanvasMetrics,
 } from "../utils/canvas";
 import { TRAIL_MAX_MS } from "../const";
@@ -70,7 +70,9 @@ export class LivePanel extends LitElement {
       drawPolygon(ctx, this.calibration.polygon, m);
 
       const rp = roomToCanvas(this.calibration.radar_x, this.calibration.radar_y, m);
-      drawRadarIcon(ctx, rp.cx, rp.cy, this.calibration.yaw, this.adapter.info.fovDegrees);
+      drawRadarFov(ctx, rp.cx, rp.cy, this.calibration.yaw, this.adapter.info.fovDegrees,
+          this.adapter.info.minRangeM, this.adapter.info.maxRangeM, m,
+          this.adapter.info.vitalRangeM);
 
       // Time-faded trail
       if (this._trail.length > 1) {
