@@ -192,52 +192,123 @@ export function drawPolygon(
   }
 }
 
-// ── Radar icon + FOV fan ──────────────────────────────────────────────────────
+// ── Radar FOV — annular sector(s) + icon ─────────────────────────────────────
 
 /**
- * Draw the radar icon with its FOV fan.
+ * Draw the radar detection zone as one or two annular sectors, then
+ * overlay the radar icon at (cx, cy).
  *
- * @param fovDeg  Full FOV angle in degrees (from the model's RadarModelInfo).
- *                R60ABD1 = 40°.  LD2450 = 120°.
- * @param yawDeg  Yaw calibration angle (°).  0 = fan points downward on canvas
- *                (toward Y+, i.e., away from radar toward foot of bed).
+ * Geometry (Y-down coordinate system):
+ *   yaw = 0  → fan points straight DOWN (+Y, toward foot of bed)
+ *   yaw clockwise positive
+ *
+ * When vitalRangeM is provided (e.g. R60ABD1):
+ *   Inner annulus  minRangeM … vitalRangeM : breathing / heart-rate zone (brighter)
+ *   Outer annulus  vitalRangeM … maxRangeM  : presence / sleep zone (dimmer)
+ *   Blind arc      < minRangeM              : dashed, no detection
+ *
+ * @param fovDeg      Full FOV angle in degrees (e.g. 40 for R60ABD1)
+ * @param minRangeM   Inner blind-zone boundary (m)
+ * @param maxRangeM   Outer range limit (m)
+ * @param vitalRangeM Optional split between vital-sign and presence ranges (m)
+ * @param m           Canvas metrics for cm→px scale
  */
-export function drawRadarIcon(
+export function drawRadarFov(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
   yawDeg: number,
-  fovDeg: number,   // REQUIRED — no default, caller must pass adapter.info.fovDegrees
+  fovDeg: number,
+  minRangeM: number,
+  maxRangeM: number,
+  m: CanvasMetrics,
+  vitalRangeM?: number,
 ): void {
+  // Use geometric-mean scale so range rings are circular even in non-square rooms
+  const scaleX = m.W / m.roomW;   // px per cm
+  const scaleY = m.H / m.roomD;
+  const scale  = Math.sqrt(scaleX * scaleY);  // px per cm (geometric mean)
+
+  const toPx = (rangeM: number) => rangeM * 100 * scale;
+
+  const minR    = toPx(minRangeM);
+  const maxR    = toPx(maxRangeM);
   const halfFov = (fovDeg / 2) * (Math.PI / 180);
-  const R       = 70;
-  // yaw=0 → fan points DOWN (+Y direction on canvas), so base angle = 90°
-  const base    = (90 + yawDeg) * (Math.PI / 180);
+  // yaw=0 → pointing down (+Y) = π/2 in canvas coords; clockwise yaw adds to angle
+  const base    = (Math.PI / 2) + yawDeg * (Math.PI / 180);
 
-  // FOV fan
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  for (let a = -halfFov; a <= halfFov; a += 0.03) {
-    ctx.lineTo(cx + Math.cos(base + a) * R, cy + Math.sin(base + a) * R);
+  // Helper: draw one filled annular sector
+  const annulus = (r1: number, r2: number, fill: string, stroke: string, lw = 1) => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r2, base - halfFov, base + halfFov, false);   // outer arc CW
+    ctx.arc(cx, cy, r1, base + halfFov, base - halfFov, true);    // inner arc CCW
+    ctx.closePath();
+    ctx.fillStyle   = fill;   ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+  };
+
+  if (vitalRangeM != null && vitalRangeM < maxRangeM) {
+    const vitalR = toPx(vitalRangeM);
+    // Outer zone: presence / sleep  (dimmer)
+    annulus(vitalR, maxR,
+      "rgba(100,181,246,.04)",
+      "rgba(100,181,246,.18)");
+    // Inner zone: breathing / heart rate (brighter)
+    annulus(minR, vitalR,
+      "rgba(100,181,246,.11)",
+      "rgba(100,181,246,.45)", 1.2);
+  } else {
+    // Single zone (no vital-sign split)
+    annulus(minR, maxR,
+      "rgba(100,181,246,.07)",
+      "rgba(100,181,246,.30)");
   }
-  ctx.closePath();
-  ctx.fillStyle   = "rgba(100,181,246,.08)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(100,181,246,.28)";
-  ctx.lineWidth   = 1;
-  ctx.stroke();
 
-  // Radar circle
+  // Blind zone boundary — dashed arc at minRange
+  if (minR > 2) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, minR, base - halfFov, base + halfFov, false);
+    ctx.strokeStyle = "rgba(244,67,54,.35)";
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Range labels along the radar's forward direction
+  const labelDir = { lx: Math.cos(base), ly: Math.sin(base) };
+  const drawLabel = (rangeM: number, r: number, color: string) => {
+    const lx = cx + r * labelDir.lx;
+    const ly = cy + r * labelDir.ly;
+    ctx.font         = "bold 8px system-ui";
+    ctx.textAlign    = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle    = color;
+    // Small pill background
+    const txt   = `${rangeM}m`;
+    const tw    = ctx.measureText(txt).width + 6;
+    ctx.fillStyle = "rgba(15,15,30,.7)";
+    ctx.fillRect(lx - tw/2, ly - 6, tw, 12);
+    ctx.fillStyle = color;
+    ctx.fillText(txt, lx, ly);
+    ctx.textBaseline = "alphabetic";
+  };
+
+  if (vitalRangeM != null) {
+    drawLabel(vitalRangeM, toPx(vitalRangeM), "rgba(100,181,246,.9)");
+  }
+  drawLabel(maxRangeM, maxR, "rgba(100,181,246,.65)");
+
+  // ── Radar icon (drawn on top of FOV) ───────────────────────────────────────
   ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-  ctx.fillStyle   = "rgba(15,15,30,.85)"; ctx.fill();
-  ctx.strokeStyle = "rgba(100,181,246,.85)"; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle   = "rgba(15,15,30,.9)"; ctx.fill();
+  ctx.strokeStyle = "rgba(100,181,246,.9)"; ctx.lineWidth = 1.5; ctx.stroke();
 
-  // Cross hairs
   for (const [dx, dy] of [[7,0],[-7,0],[0,7],[0,-7]] as [number,number][]) {
     ctx.beginPath();
     ctx.moveTo(cx + dx * 0.3, cy + dy * 0.3);
     ctx.lineTo(cx + dx, cy + dy);
-    ctx.strokeStyle = "rgba(100,181,246,.6)"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.strokeStyle = "rgba(100,181,246,.65)"; ctx.lineWidth = 1.2; ctx.stroke();
   }
 }
 
