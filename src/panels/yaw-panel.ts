@@ -4,7 +4,8 @@ import type { CalibrationConfig, Vec2, YawCalibState } from "../types";
 import type { RadarModelAdapter } from "../models";
 import {
   setupCanvas, drawBase, drawPolygon, drawRadarIcon, drawDot,
-  roomToCanvas, canvasToRoom, eventToCanvasPt, type CanvasMetrics,
+  roomToCanvas, canvasToRoom, eventToCanvasCssPt,
+  type CanvasMetrics,
 } from "../utils/canvas";
 import { applyTransform, calcYawFromTwoPoints, calcCalibrationResidual } from "../utils/transform";
 import { localize } from "../localize/localize";
@@ -24,21 +25,10 @@ export class YawPanel extends LitElement {
 
   private _L(k: string) { return localize(k, this.lang); }
 
-  connectedCallback() {
-    super.connectedCallback();
-    this._rafId = requestAnimationFrame(() => this._draw());
-  }
+  connectedCallback()    { super.connectedCallback();    this._loop(); }
   disconnectedCallback() { super.disconnectedCallback(); cancelAnimationFrame(this._rafId); }
 
-  // ── canvas height: proportional to room aspect ratio ─────────────────────
-
-  private _canvasH(cv: HTMLCanvasElement): number {
-    const W     = cv.offsetWidth || 400;
-    const ratio = this.roomD / this.roomW;
-    return Math.max(130, Math.min(240, Math.round(W * ratio)));
-  }
-
-  // ── public API ────────────────────────────────────────────────────────────
+  // ── public API ─────────────────────────────────────────────────────────────
 
   public offerReading(rawX: number, rawY: number): void {
     if (!this._yw.capturing) return;
@@ -46,33 +36,35 @@ export class YawPanel extends LitElement {
     this._yw = { ...this._yw, capturing: false };
   }
 
-  // ── canvas metrics ────────────────────────────────────────────────────────
+  // ── canvas metrics ─────────────────────────────────────────────────────────
 
-  private _m(): CanvasMetrics {
-    const cv  = this._cv;
-    const W   = cv?.offsetWidth ?? 400;
-    const H   = cv ? this._canvasH(cv) : 200;
-    return { W, H, roomW: this.roomW, roomD: this.roomD };
+  private _cssH(): number {
+    const W = this._cv?.offsetWidth || 400;
+    return Math.max(140, Math.min(280, Math.round(W * this.roomD / this.roomW)));
   }
 
-  // ── canvas interaction ────────────────────────────────────────────────────
+  private _m(): CanvasMetrics {
+    return {
+      W: this._cv?.offsetWidth || 400, H: this._cssH(),
+      roomW: this.roomW, roomD: this.roomD,
+    };
+  }
+
+  // ── canvas click → room coordinates ───────────────────────────────────────
 
   private _onCanvasClick(e: MouseEvent) {
-    const cv  = this._cv; if (!cv) return;
-    const yw  = this._yw;
+    const cv = this._cv; if (!cv) return;
+    const yw = this._yw;
     if (yw.sub !== 0 && yw.sub !== 1) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const raw = eventToCanvasPt(e, cv);
-    const pt  = { x: raw.x / dpr, y: raw.y / dpr };
-    const m   = this._m();
-    // 计算该点对应的房间坐标，供 UI 显示给用户
-    const roomPt = canvasToRoom(pt.x, pt.y, m);
+    // Use CSS-pixel coordinates directly (no DPR division needed)
+    const cssPt  = eventToCanvasCssPt(e, cv);
+    const roomPt = canvasToRoom(cssPt.x, cssPt.y, this._m());
 
     if (yw.sub === 0) {
-      this._yw = { ...yw, refA: { canvasPt: pt, roomPt }, sub: 0.5 };
+      this._yw = { ...yw, refA: { canvasPt: cssPt, roomPt }, sub: 0.5 };
     } else {
-      this._yw = { ...yw, refB: { canvasPt: pt, roomPt }, sub: 1.5 };
+      this._yw = { ...yw, refB: { canvasPt: cssPt, roomPt }, sub: 1.5 };
     }
     this.requestUpdate();
   }
@@ -96,6 +88,7 @@ export class YawPanel extends LitElement {
     const yw = this._yw;
     if (!yw.refA?.detPt || !yw.refB?.detPt) return;
     const m    = this._m();
+    // Use stored canvasPt to derive mapA/mapB (same as what user clicked)
     const mapA = canvasToRoom(yw.refA.canvasPt.x, yw.refA.canvasPt.y, m);
     const mapB = canvasToRoom(yw.refB.canvasPt.x, yw.refB.canvasPt.y, m);
     const detA = yw.refA.detPt, detB = yw.refB.detPt;
@@ -107,27 +100,32 @@ export class YawPanel extends LitElement {
       { detail: updCal, bubbles: true, composed: true }));
   }
 
-  // ── canvas draw ───────────────────────────────────────────────────────────
+  // ── rAF draw loop ──────────────────────────────────────────────────────────
 
-  private _draw() {
+  private _loop() {
     const cv = this._cv;
-    if (cv) {
-      const cssH = this._canvasH(cv);
+    if (cv && cv.offsetWidth > 0 && this.adapter) {
+      const cssH = this._cssH();
       const ctx  = setupCanvas(cv, cssH);
       const m    = this._m();
+
       drawBase(ctx, m);
       drawPolygon(ctx, this.calibration.polygon, m, true);
 
       const rp = roomToCanvas(this.calibration.radar_x, this.calibration.radar_y, m);
+      // Pass adapter.info.fovDegrees explicitly — R60ABD1 = 40°
       drawRadarIcon(ctx, rp.cx, rp.cy, this.calibration.yaw, this.adapter.info.fovDegrees);
 
       const drawRef = (ref: typeof this._yw.refA, label: string) => {
         if (!ref) return;
+        // canvasPt is in CSS pixels; draw at those coordinates
         drawDot(ctx, ref.canvasPt.x, ref.canvasPt.y, label, "#64b5f6");
         if (ref.detPt) {
           const tr  = applyTransform(ref.detPt.x, ref.detPt.y, 0, this.calibration);
           const det = roomToCanvas(tr.roomX, tr.roomY, m);
-          ctx.beginPath(); ctx.moveTo(ref.canvasPt.x, ref.canvasPt.y); ctx.lineTo(det.cx, det.cy);
+          ctx.beginPath();
+          ctx.moveTo(ref.canvasPt.x, ref.canvasPt.y);
+          ctx.lineTo(det.cx, det.cy);
           ctx.strokeStyle = "rgba(244,99,99,.4)"; ctx.lineWidth = 1;
           ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]);
           drawDot(ctx, det.cx, det.cy, label, "rgba(244,99,99,.85)", true);
@@ -136,13 +134,12 @@ export class YawPanel extends LitElement {
       drawRef(this._yw.refA, "A");
       drawRef(this._yw.refB, "B");
     }
-    this._rafId = requestAnimationFrame(() => this._draw());
+    this._rafId = requestAnimationFrame(() => this._loop());
   }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+  // ── step description with coordinates ─────────────────────────────────────
 
-  /** 格式化坐标字符串，插入 {x} / {y} 占位符 */
-  private _fmtCoord(template: string, pt: Vec2): string {
+  private _fmtMarked(template: string, pt: Vec2): string {
     return template
       .replace("{x}", String(Math.round(pt.x)))
       .replace("{y}", String(Math.round(pt.y)));
@@ -159,9 +156,11 @@ export class YawPanel extends LitElement {
     if (rel >= 1) {
       sub = this._L(isA ? "yaw.ref_a_done" : "yaw.ref_b_done");
     } else if (rel === 0.5) {
-      // 已点击，显示房间坐标
       const tmpl = this._L(isA ? "yaw.ref_a_marked" : "yaw.ref_b_marked");
-      sub = ref?.roomPt ? this._fmtCoord(tmpl, ref.roomPt) : tmpl;
+      // Show room coordinates of the clicked point
+      sub = (ref?.roomPt != null)
+        ? this._fmtMarked(tmpl, ref.roomPt)
+        : tmpl.replace("{x}", "?").replace("{y}", "?");
     } else if (rel === 0) {
       sub = this._L(isA ? "yaw.ref_a_idle" : "yaw.ref_b_step");
     } else {
@@ -178,12 +177,12 @@ export class YawPanel extends LitElement {
       </div>`;
   }
 
-  // ── render ────────────────────────────────────────────────────────────────
+  // ── render ─────────────────────────────────────────────────────────────────
 
   protected render() {
-    const yw     = this._yw;
-    const canCap = yw.sub === 0.5 || yw.sub === 1.5;
-    const ok     = yw.sub >= 2;
+    const yw      = this._yw;
+    const canCap  = yw.sub === 0.5 || yw.sub === 1.5;
+    const ok      = yw.sub >= 2;
     const resText = ok
       ? this._L("yaw.result_ok")
           .replace("{yaw}",      String(this.calibration.yaw))
@@ -194,7 +193,8 @@ export class YawPanel extends LitElement {
       ${this._refStep(0)}
       ${this._refStep(1)}
       <canvas id="yaw-cv" @click=${this._onCanvasClick}></canvas>
-      <button class="cap-btn" ?disabled=${!canCap || yw.capturing} @click=${this._onCapture}>
+      <button class="cap-btn" ?disabled=${!canCap || yw.capturing}
+        @click=${this._onCapture}>
         ${yw.capturing ? this._L("yaw.capture_wait") : this._L("yaw.capture_btn")}
       </button>
       <div class="result-line ${ok ? "ok" : ""}">${resText}</div>
@@ -206,15 +206,13 @@ export class YawPanel extends LitElement {
     canvas {
       display:block;width:100%;border-radius:8px;
       border:1px solid var(--divider-color,rgba(128,128,128,.15));
-      background:rgba(0,0,0,.15);touch-action:none;cursor:crosshair;
-      margin:8px 0;
+      background:rgba(0,0,0,.15);touch-action:none;cursor:crosshair;margin:8px 0;
     }
     .ref-step {
       display:flex;align-items:center;gap:9px;padding:8px 10px;
-      border-radius:8px;border:1px solid var(--divider-color);
-      margin-bottom:5px;transition:all .22s;
+      border-radius:8px;border:1px solid var(--divider-color);margin-bottom:5px;transition:all .22s;
     }
-    .ref-step.act { border-color:var(--primary-color);background:rgba(3,169,244,.07); }
+    .ref-step.act  { border-color:var(--primary-color);background:rgba(3,169,244,.07); }
     .ref-step.done { border-color:var(--success-color,#4caf50);background:rgba(76,175,80,.05); }
     .ref-num {
       width:21px;height:21px;border-radius:50%;flex-shrink:0;
@@ -222,21 +220,23 @@ export class YawPanel extends LitElement {
       font-size:11px;font-weight:700;
       background:var(--divider-color);color:var(--secondary-text-color);transition:all .2s;
     }
-    .ref-step.act .ref-num { background:var(--primary-color);color:#fff; }
+    .ref-step.act  .ref-num { background:var(--primary-color);color:#fff; }
     .ref-step.done .ref-num { background:var(--success-color,#4caf50);color:#fff; }
     .ref-title { font-size:12px;font-weight:500; }
-    .ref-sub { font-size:11px;color:var(--secondary-text-color);margin-top:1px; }
+    .ref-sub   { font-size:11px;color:var(--secondary-text-color);margin-top:1px; }
     .cap-btn {
-      width:100%;margin-top:9px;
+      width:100%;margin-top:9px;padding:9px;
       background:rgba(3,169,244,.12);border:1px solid rgba(3,169,244,.35);
-      border-radius:8px;padding:9px;font-size:13px;font-weight:500;
+      border-radius:8px;font-size:13px;font-weight:500;
       cursor:pointer;color:var(--primary-color);transition:background .15s;
     }
     .cap-btn:disabled { opacity:.4;cursor:not-allowed; }
     .cap-btn:not(:disabled):hover { background:rgba(3,169,244,.22); }
-    .result-line { font-size:11px;text-align:center;min-height:15px;margin-top:5px;color:var(--secondary-text-color); }
+    .result-line {
+      font-size:11px;text-align:center;min-height:15px;margin-top:5px;
+      color:var(--secondary-text-color);
+    }
     .result-line.ok { color:var(--success-color,#4caf50); }
   `;
 }
-
 declare global { interface HTMLElementTagNameMap { "mmwave-yaw-panel": YawPanel } }

@@ -4,7 +4,7 @@ import type { CalibrationConfig } from "../types";
 import type { RadarModelAdapter } from "../models";
 import {
   setupCanvas, drawBase, drawPolygon,
-  canvasToRoom, eventToCanvasPt,
+  canvasToRoom, eventToCanvasCssPt,
   type CanvasMetrics,
 } from "../utils/canvas";
 import { localize } from "../localize/localize";
@@ -14,7 +14,6 @@ export class GeoPanel extends LitElement {
   @property({ attribute: false }) adapter!: RadarModelAdapter;
   @property({ attribute: false }) calibration!: CalibrationConfig;
   @property({ attribute: false }) lang = "en";
-  /** Room dimensions (cm) — needed for aspect-ratio canvas. */
   @property({ type: Number }) roomW = 400;
   @property({ type: Number }) roomD = 350;
 
@@ -23,64 +22,57 @@ export class GeoPanel extends LitElement {
 
   private _L(k: string) { return localize(k, this.lang); }
 
-  connectedCallback() {
-    super.connectedCallback();
-    this._rafId = requestAnimationFrame(() => this._draw());
-  }
+  connectedCallback()    { super.connectedCallback();    this._loop(); }
   disconnectedCallback() { super.disconnectedCallback(); cancelAnimationFrame(this._rafId); }
 
-  // ── canvas height: proportional to room aspect ratio, capped ─────────────
+  // ── aspect-ratio canvas height ─────────────────────────────────────────────
 
-  private _canvasH(cv: HTMLCanvasElement): number {
-    const W     = cv.offsetWidth || 400;
-    const ratio = this.roomD / this.roomW;
-    return Math.max(130, Math.min(260, Math.round(W * ratio)));
+  private _cssH(): number {
+    const W = this._cv?.offsetWidth || 400;
+    return Math.max(140, Math.min(320, Math.round(W * this.roomD / this.roomW)));
   }
 
-  // ── emit calibration-changed ──────────────────────────────────────────────
+  // ── metrics (CSS-pixel space) ──────────────────────────────────────────────
 
-  private _emit(patch: Partial<CalibrationConfig>) {
-    this.dispatchEvent(new CustomEvent("calibration-changed",
-      { detail: { ...this.calibration, ...patch }, bubbles: true, composed: true }));
+  private _m(): CanvasMetrics {
+    return {
+      W: this._cv?.offsetWidth || 400, H: this._cssH(),
+      roomW: this.roomW, roomD: this.roomD,
+    };
   }
 
-  // ── polygon interactions ──────────────────────────────────────────────────
+  // ── event handlers ─────────────────────────────────────────────────────────
 
   private _onCanvasClick(e: MouseEvent) {
     const cv = this._cv; if (!cv) return;
-    const raw = eventToCanvasPt(e, cv);
-    const dpr = window.devicePixelRatio || 1;
-    const pt  = { x: raw.x / dpr, y: raw.y / dpr };
-    const H   = this._canvasH(cv);
-    const m: CanvasMetrics = {
-      W: cv.offsetWidth || 400, H,
-      roomW: this.roomW, roomD: this.roomD,
-    };
-    const roomPt = canvasToRoom(pt.x, pt.y, m);
+    const cssPt  = eventToCanvasCssPt(e, cv);
+    const roomPt = canvasToRoom(cssPt.x, cssPt.y, this._m());
     this._emit({ polygon: [...this.calibration.polygon, roomPt] });
   }
 
   private _undo()  { const p = [...this.calibration.polygon]; p.pop();   this._emit({ polygon: p }); }
   private _clear() { this._emit({ polygon: [] }); }
 
-  // ── canvas draw ───────────────────────────────────────────────────────────
+  private _emit(patch: Partial<CalibrationConfig>) {
+    this.dispatchEvent(new CustomEvent("calibration-changed",
+      { detail: { ...this.calibration, ...patch }, bubbles: true, composed: true }));
+  }
 
-  private _draw() {
+  // ── rAF draw loop ──────────────────────────────────────────────────────────
+
+  private _loop() {
     const cv = this._cv;
-    if (cv) {
-      const cssH = this._canvasH(cv);
+    if (cv && cv.offsetWidth > 0) {
+      const cssH = this._cssH();
       const ctx  = setupCanvas(cv, cssH);
-      const m: CanvasMetrics = {
-        W: cv.offsetWidth || 400, H: cssH,
-        roomW: this.roomW, roomD: this.roomD,
-      };
+      const m    = this._m();
       drawBase(ctx, m);
       drawPolygon(ctx, this.calibration.polygon, m);
     }
-    this._rafId = requestAnimationFrame(() => this._draw());
+    this._rafId = requestAnimationFrame(() => this._loop());
   }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
+  // ── form helpers ───────────────────────────────────────────────────────────
 
   private _numField(label: string, key: keyof CalibrationConfig, value: number, step = 5, min = -9999) {
     return html`
@@ -88,27 +80,30 @@ export class GeoPanel extends LitElement {
         <label>${label}</label>
         <input type="number" .value=${String(value)} step=${step} min=${min}
           @change=${(e: Event) => {
-            const v = parseFloat((e.target as HTMLInputElement).value) || 0;
-            this._emit({ [key]: v } as Partial<CalibrationConfig>);
+            const _v = parseFloat((e.target as HTMLInputElement).value) || 0;
+            const _p: Partial<CalibrationConfig> = { [key]: _v };
+            this._emit(_p);
           }}>
         <span class="unit">cm</span>
       </div>`;
   }
 
-  private _degField(label: string, key: keyof CalibrationConfig, value: number, min = -180, max = 180) {
+  private _degField(label: string, key: keyof CalibrationConfig, value: number,
+                    min = -180, max = 180) {
     return html`
       <div class="field">
         <label>${label}</label>
         <input type="number" .value=${String(value)} step="0.5" min=${min} max=${max}
           @change=${(e: Event) => {
-            const v = parseFloat((e.target as HTMLInputElement).value) || 0;
-            this._emit({ [key]: v } as Partial<CalibrationConfig>);
+            const _v = parseFloat((e.target as HTMLInputElement).value) || 0;
+            const _p: Partial<CalibrationConfig> = { [key]: _v };
+            this._emit(_p);
           }}>
         <span class="unit">°</span>
       </div>`;
   }
 
-  // ── render ────────────────────────────────────────────────────────────────
+  // ── render ─────────────────────────────────────────────────────────────────
 
   protected render() {
     const c  = this.calibration;
@@ -141,7 +136,7 @@ export class GeoPanel extends LitElement {
   }
 
   static styles = css`
-    :host { display: block; }
+    :host { display:block; }
     .sec-title {
       font-size:10px;letter-spacing:.07em;text-transform:uppercase;
       color:var(--secondary-text-color);margin:0 0 8px;
@@ -153,11 +148,12 @@ export class GeoPanel extends LitElement {
       border-radius:8px;transition:border-color .15s;
     }
     .field:focus-within { border-color:var(--primary-color); }
-    .field label { font-size:12px;color:var(--secondary-text-color);width:90px;flex-shrink:0; }
+    .field label {
+      font-size:12px;color:var(--secondary-text-color);width:90px;flex-shrink:0;
+    }
     .field input {
       flex:1;background:none;border:none;outline:none;
-      font-size:13px;font-weight:500;text-align:right;
-      color:var(--primary-text-color);
+      font-size:13px;font-weight:500;text-align:right;color:var(--primary-text-color);
     }
     .unit { font-size:11px;color:var(--secondary-text-color);min-width:18px;text-align:right; }
     .note {
@@ -183,5 +179,4 @@ export class GeoPanel extends LitElement {
     }
   `;
 }
-
 declare global { interface HTMLElementTagNameMap { "mmwave-geo-panel": GeoPanel } }

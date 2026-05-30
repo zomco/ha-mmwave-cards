@@ -18,7 +18,6 @@ export class LivePanel extends LitElement {
   @property({ attribute: false }) lang = "en";
   @property({ type: Number }) roomW = 400;
   @property({ type: Number }) roomD = 350;
-  /** Targets already transformed by the card (room coords populated). */
   @property({ attribute: false }) targets: RadarTarget[] = [];
   @property({ type: Boolean }) present = false;
 
@@ -28,13 +27,9 @@ export class LivePanel extends LitElement {
 
   private _L(k: string) { return localize(k, this.lang); }
 
-  connectedCallback() {
-    super.connectedCallback();
-    this._rafId = requestAnimationFrame(() => this._draw());
-  }
+  connectedCallback()    { super.connectedCallback();    this._loop(); }
   disconnectedCallback() { super.disconnectedCallback(); cancelAnimationFrame(this._rafId); }
 
-  /** Called by the card when a new reading arrives. */
   public addTrailPoints(targets: RadarTarget[]) {
     const now = Date.now();
     for (const t of targets) {
@@ -48,39 +43,47 @@ export class LivePanel extends LitElement {
 
   public clearTrail() { this._trail = []; }
 
-  private _m(): CanvasMetrics {
-    const cv  = this._cv;
-    const W   = cv?.offsetWidth ?? 400;
-    const ratio = this.roomD / this.roomW;
-    const H   = Math.max(150, Math.min(300, Math.round(W * ratio)));
-    return { W, H, roomW: this.roomW, roomD: this.roomD };
+  // ── canvas metrics ─────────────────────────────────────────────────────────
+
+  private _cssH(): number {
+    const W = this._cv?.offsetWidth || 400;
+    return Math.max(160, Math.min(360, Math.round(W * this.roomD / this.roomW)));
   }
 
-  private _draw() {
+  private _m(): CanvasMetrics {
+    return {
+      W: this._cv?.offsetWidth || 400, H: this._cssH(),
+      roomW: this.roomW, roomD: this.roomD,
+    };
+  }
+
+  // ── rAF draw loop ──────────────────────────────────────────────────────────
+
+  private _loop() {
     const cv = this._cv;
-    if (cv) {
-      const m   = this._m();
-      const ctx = setupCanvas(cv, m.H);
+    if (cv && cv.offsetWidth > 0 && this.adapter) {
+      const cssH = this._cssH();
+      const ctx  = setupCanvas(cv, cssH);
+      const m    = this._m();
+
       drawBase(ctx, m);
       drawPolygon(ctx, this.calibration.polygon, m);
 
-      // Radar icon
       const rp = roomToCanvas(this.calibration.radar_x, this.calibration.radar_y, m);
       drawRadarIcon(ctx, rp.cx, rp.cy, this.calibration.yaw, this.adapter.info.fovDegrees);
 
       // Time-faded trail
       if (this._trail.length > 1) {
         const now = Date.now();
-        this._trail.forEach((p, i) => {
-          if (i === 0) return;
-          const prev = this._trail[i-1];
-          const age  = (now - p.t) / TRAIL_MAX_MS;
-          const a    = Math.max(0, 0.5 - age*0.5);
+        for (let i = 1; i < this._trail.length; i++) {
+          const prev = this._trail[i - 1], cur = this._trail[i];
+          const age  = (now - cur.t) / TRAIL_MAX_MS;
+          const a    = Math.max(0, 0.5 - age * 0.5);
           const pa   = roomToCanvas(prev.x, prev.y, m);
-          const pb   = roomToCanvas(p.x, p.y, m);
+          const pb   = roomToCanvas(cur.x,  cur.y,  m);
           ctx.beginPath(); ctx.moveTo(pa.cx, pa.cy); ctx.lineTo(pb.cx, pb.cy);
           ctx.strokeStyle = `rgba(100,181,246,${a})`; ctx.lineWidth = 2; ctx.stroke();
-        });
+        }
       }
 
       // Targets
@@ -88,37 +91,37 @@ export class LivePanel extends LitElement {
         if (!t.room) continue;
         const cp = roomToCanvas(t.room.roomX, t.room.roomY, m);
         drawTarget(ctx, cp.cx, cp.cy, t.room.inBoundary);
-        // Target index label for multi-target models
         if (this.adapter.info.maxTargets > 1) {
-          ctx.fillStyle = "rgba(255,255,255,.7)";
-          ctx.font = "9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillStyle    = "rgba(255,255,255,.7)";
+          ctx.font         = "9px system-ui";
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "middle";
           ctx.fillText(String(t.index + 1), cp.cx, cp.cy - 14);
           ctx.textBaseline = "alphabetic";
         }
       }
     }
-    this._rafId = requestAnimationFrame(() => this._draw());
+    this._rafId = requestAnimationFrame(() => this._loop());
   }
 
-  // ── status helpers ─────────────────────────────────────────────────────────
+  // ── status ─────────────────────────────────────────────────────────────────
 
-  private _badgeText(): string {
+  private _badgeText() {
     if (!this.present) return this._L("live.badge_none");
-    const insideCount = this.targets.filter(t => t.room?.inBoundary).length;
-    if (insideCount === 0) return this._L("live.badge_filtered");
-    return this._L("live.badge_present");
+    const inside = this.targets.filter(t => t.room?.inBoundary).length;
+    return inside > 0 ? this._L("live.badge_present") : this._L("live.badge_filtered");
   }
 
-  private _badgeCls(): string {
+  private _badgeCls() {
     if (!this.present) return "";
-    const inside = this.targets.some(t => t.room?.inBoundary);
-    return inside ? "on" : "filtered";
+    return this.targets.some(t => t.room?.inBoundary) ? "on" : "filtered";
   }
 
-  /** First inside-boundary target (for coordinate display). */
   private _primaryTarget(): TransformResult | undefined {
     return this.targets.find(t => t.room?.inBoundary)?.room;
   }
+
+  // ── render ─────────────────────────────────────────────────────────────────
 
   protected render() {
     const pos = this._primaryTarget();
@@ -137,12 +140,12 @@ export class LivePanel extends LitElement {
           <div class="cval">${pos ? Math.round(pos.roomY) : "—"}</div>
           <div class="clbl">${this._L("live.room_y")}</div>
         </div>
-        ${this.adapter.info.hasZAxis ? html`
+        ${this.adapter?.info.hasZAxis ? html`
           <div class="cbox">
             <div class="cval">${pos ? Math.round(pos.heightFloor) : "—"}</div>
             <div class="clbl">${this._L("live.height")}</div>
           </div>` : nothing}
-        ${this.adapter.info.maxTargets > 1 ? html`
+        ${this.adapter?.info.maxTargets > 1 ? html`
           <div class="cbox">
             <div class="cval">${this.targets.filter(t => t.room?.inBoundary).length}</div>
             <div class="clbl">${this._L("live.targets")}</div>
@@ -159,7 +162,7 @@ export class LivePanel extends LitElement {
       padding:3px 10px;border-radius:20px;
       background:rgba(128,128,128,.12);color:var(--secondary-text-color);transition:all .3s;
     }
-    .badge.on { background:rgba(3,169,244,.2);color:var(--primary-color,#64b5f6); }
+    .badge.on       { background:rgba(3,169,244,.2);color:var(--primary-color,#64b5f6); }
     .badge.filtered { background:rgba(244,67,54,.15);color:#ef9a9a; }
     canvas {
       display:block;width:100%;border-radius:8px;
@@ -176,5 +179,4 @@ export class LivePanel extends LitElement {
     .clbl { font-size:10px;color:var(--secondary-text-color);margin-top:2px; }
   `;
 }
-
 declare global { interface HTMLElementTagNameMap { "mmwave-live-panel": LivePanel } }
