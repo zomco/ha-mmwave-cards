@@ -195,28 +195,18 @@ export function drawPolygon(
 // ── Radar FOV — annular sector(s) + icon ─────────────────────────────────────
 
 /**
- * Draw the radar detection zone as one or two annular sectors, then
- * overlay the radar icon at (cx, cy).
+ * Draw the radar detection zone as annular sector(s), then overlay the icon.
  *
- * Geometry (Y-down coordinate system):
- *   yaw = 0  → fan points straight DOWN (+Y, toward foot of bed)
- *   yaw clockwise positive
+ * Coordinate convention: Y-down, yaw=0 → fan points straight DOWN (+Y).
  *
- * When vitalRangeM is provided (e.g. R60ABD1):
- *   Inner annulus  minRangeM … vitalRangeM : breathing / heart-rate zone (brighter)
- *   Outer annulus  vitalRangeM … maxRangeM  : presence / sleep zone (dimmer)
- *   Blind arc      < minRangeM              : dashed, no detection
- *
- * @param fovDeg      Full FOV angle in degrees (e.g. 40 for R60ABD1)
- * @param minRangeM   Inner blind-zone boundary (m)
- * @param maxRangeM   Outer range limit (m)
- * @param vitalRangeM Optional split between vital-sign and presence ranges (m)
- * @param m           Canvas metrics for cm→px scale
+ * For R60ABD1:
+ *   Inner annulus  0.4 – 1.5 m  : breathing / heart-rate zone (bright blue)
+ *   Outer annulus  1.5 – 2.5 m  : presence / sleep zone (dim blue)
+ *   Dashed arc     < 0.4 m      : blind zone boundary (red dashed)
  */
 export function drawRadarFov(
   ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
+  cx: number, cy: number,
   yawDeg: number,
   fovDeg: number,
   minRangeM: number,
@@ -224,91 +214,117 @@ export function drawRadarFov(
   m: CanvasMetrics,
   vitalRangeM?: number,
 ): void {
-  // Use geometric-mean scale so range rings are circular even in non-square rooms
-  const scaleX = m.W / m.roomW;   // px per cm
-  const scaleY = m.H / m.roomD;
-  const scale  = Math.sqrt(scaleX * scaleY);  // px per cm (geometric mean)
+  // Scale: geometric mean of X and Y scale so range rings are circular
+  const scale   = Math.sqrt((m.W / m.roomW) * (m.H / m.roomD));  // px/cm
+  const toPx    = (rangeM: number) => Math.max(rangeM * 100 * scale, 1);
 
-  const toPx = (rangeM: number) => rangeM * 100 * scale;
-
-  const minR    = toPx(minRangeM);
-  const maxR    = toPx(maxRangeM);
   const halfFov = (fovDeg / 2) * (Math.PI / 180);
-  // yaw=0 → pointing down (+Y) = π/2 in canvas coords; clockwise yaw adds to angle
-  const base    = (Math.PI / 2) + yawDeg * (Math.PI / 180);
+  // yaw=0 → pointing down (+Y). Canvas angle 0=right, CW-positive.
+  const base    = Math.PI / 2 + yawDeg * (Math.PI / 180);
 
-  // Helper: draw one filled annular sector
-  const annulus = (r1: number, r2: number, fill: string, stroke: string, lw = 1) => {
+  const minR  = toPx(minRangeM);
+  const maxR  = toPx(maxRangeM);
+
+  /**
+   * Draw ONE filled annular sector.
+   * r_inner < r_outer. Uses explicit moveTo to prevent any implicit line to center.
+   */
+  const drawAnnulus = (
+    r_inner: number, r_outer: number,
+    fillColor: string, strokeColor: string, strokeW = 1.2,
+  ) => {
+    // Start point: outer arc's left edge
+    const startX = cx + r_outer * Math.cos(base - halfFov);
+    const startY = cy + r_outer * Math.sin(base - halfFov);
+
     ctx.beginPath();
-    ctx.arc(cx, cy, r2, base - halfFov, base + halfFov, false);   // outer arc CW
-    ctx.arc(cx, cy, r1, base + halfFov, base - halfFov, true);    // inner arc CCW
-    ctx.closePath();
-    ctx.fillStyle   = fill;   ctx.fill();
-    ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+    ctx.moveTo(startX, startY);                                         // ← explicit start
+    ctx.arc(cx, cy, r_outer, base - halfFov, base + halfFov, false);   // outer arc, CW
+    // canvas auto-draws a line from outer-right to inner-right (right radial)
+    ctx.arc(cx, cy, r_inner, base + halfFov, base - halfFov, true);    // inner arc, CCW
+    ctx.closePath();                                                     // left radial
+
+    ctx.fillStyle   = fillColor;   ctx.fill();
+    ctx.strokeStyle = strokeColor; ctx.lineWidth = strokeW; ctx.stroke();
   };
 
-  if (vitalRangeM != null && vitalRangeM < maxRangeM) {
+  // ── Draw zones ─────────────────────────────────────────────────────────────
+
+  if (vitalRangeM != null && vitalRangeM > minRangeM && vitalRangeM < maxRangeM) {
     const vitalR = toPx(vitalRangeM);
-    // Outer zone: presence / sleep  (dimmer)
-    annulus(vitalR, maxR,
-      "rgba(100,181,246,.04)",
-      "rgba(100,181,246,.18)");
-    // Inner zone: breathing / heart rate (brighter)
-    annulus(minR, vitalR,
-      "rgba(100,181,246,.11)",
-      "rgba(100,181,246,.45)", 1.2);
+
+    // Outer zone (presence / sleep): vitalRange → maxRange  — dim grey-blue
+    drawAnnulus(vitalR, maxR,
+      "rgba(100,181,246,.10)",   // fill
+      "rgba(100,181,246,.35)",   // stroke
+    );
+
+    // Inner zone (breath / HR): minRange → vitalRange  — bright blue
+    drawAnnulus(minR, vitalR,
+      "rgba(100,181,246,.25)",   // fill
+      "rgba(100,181,246,.70)",   // stroke
+      1.5,
+    );
   } else {
-    // Single zone (no vital-sign split)
-    annulus(minR, maxR,
-      "rgba(100,181,246,.07)",
-      "rgba(100,181,246,.30)");
+    // Single zone fallback
+    drawAnnulus(minR, maxR,
+      "rgba(100,181,246,.18)",
+      "rgba(100,181,246,.55)",
+    );
   }
 
-  // Blind zone boundary — dashed arc at minRange
-  if (minR > 2) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, minR, base - halfFov, base + halfFov, false);
-    ctx.strokeStyle = "rgba(244,67,54,.35)";
-    ctx.lineWidth   = 1;
-    ctx.setLineDash([3, 3]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // ── Blind zone boundary (dashed arc at minRange) ─────────────────────────
 
-  // Range labels along the radar's forward direction
-  const labelDir = { lx: Math.cos(base), ly: Math.sin(base) };
+  ctx.beginPath();
+  ctx.arc(cx, cy, minR, base - halfFov, base + halfFov, false);
+  ctx.strokeStyle = "rgba(244,99,99,.55)";
+  ctx.lineWidth   = 1.2;
+  ctx.setLineDash([3, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── Range labels (along radar forward axis) ───────────────────────────────
+
   const drawLabel = (rangeM: number, r: number, color: string) => {
-    const lx = cx + r * labelDir.lx;
-    const ly = cy + r * labelDir.ly;
-    ctx.font         = "bold 8px system-ui";
+    const tx  = cx + r * Math.cos(base);
+    const ty  = cy + r * Math.sin(base);
+    const txt = `${rangeM}m`;
+    ctx.font         = "bold 9px system-ui";
     ctx.textAlign    = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle    = color;
-    // Small pill background
-    const txt   = `${rangeM}m`;
-    const tw    = ctx.measureText(txt).width + 6;
-    ctx.fillStyle = "rgba(15,15,30,.7)";
-    ctx.fillRect(lx - tw/2, ly - 6, tw, 12);
+    const tw = ctx.measureText(txt).width;
+    // pill background
+    ctx.fillStyle = "rgba(10,10,24,.82)";
+    ctx.beginPath();
+    ctx.roundRect?.(tx - tw/2 - 3, ty - 7, tw + 6, 14, 3);
+    ctx.fill();
     ctx.fillStyle = color;
-    ctx.fillText(txt, lx, ly);
-    ctx.textBaseline = "alphabetic";
+    ctx.fillText(txt, tx, ty);
   };
 
   if (vitalRangeM != null) {
-    drawLabel(vitalRangeM, toPx(vitalRangeM), "rgba(100,181,246,.9)");
+    drawLabel(vitalRangeM, toPx(vitalRangeM), "rgba(100,181,246,1)");
   }
-  drawLabel(maxRangeM, maxR, "rgba(100,181,246,.65)");
+  drawLabel(maxRangeM, maxR, "rgba(160,210,255,.85)");
+  ctx.textBaseline = "alphabetic";
 
-  // ── Radar icon (drawn on top of FOV) ───────────────────────────────────────
-  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-  ctx.fillStyle   = "rgba(15,15,30,.9)"; ctx.fill();
-  ctx.strokeStyle = "rgba(100,181,246,.9)"; ctx.lineWidth = 1.5; ctx.stroke();
+  // ── Radar icon (drawn on top) ─────────────────────────────────────────────
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+  ctx.fillStyle   = "rgba(10,10,24,.92)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(100,181,246,.95)";
+  ctx.lineWidth   = 1.5;
+  ctx.stroke();
 
   for (const [dx, dy] of [[7,0],[-7,0],[0,7],[0,-7]] as [number,number][]) {
     ctx.beginPath();
     ctx.moveTo(cx + dx * 0.3, cy + dy * 0.3);
     ctx.lineTo(cx + dx, cy + dy);
-    ctx.strokeStyle = "rgba(100,181,246,.65)"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.strokeStyle = "rgba(100,181,246,.7)";
+    ctx.lineWidth   = 1.2;
+    ctx.stroke();
   }
 }
 
