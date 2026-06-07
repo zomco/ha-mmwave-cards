@@ -39,8 +39,10 @@ export class YawPanel extends LitElement {
   // ── canvas metrics ─────────────────────────────────────────────────────────
 
   private _cssH(): number {
-    const W = this._cv?.offsetWidth || 400;
-    return Math.max(140, Math.min(280, Math.round(W * this.roomD / this.roomW)));
+    const W = this._cv?.offsetWidth;
+    if (!W || W === 0) return 280;   // not yet laid out
+    const ratio = this.roomD / this.roomW;
+    return Math.max(140, Math.min(280, Math.round(W * ratio)));
   }
 
   private _m(): CanvasMetrics {
@@ -158,11 +160,21 @@ export class YawPanel extends LitElement {
     if (rel >= 1) {
       sub = this._L(isA ? "yaw.ref_a_done" : "yaw.ref_b_done");
     } else if (rel === 0.5) {
-      const tmpl = this._L(isA ? "yaw.ref_a_marked" : "yaw.ref_b_marked");
-      // Show room coordinates of the clicked point
-      sub = (ref?.roomPt != null)
-        ? this._fmtMarked(tmpl, ref.roomPt)
-        : tmpl.replace("{x}", "?").replace("{y}", "?");
+      // Show room coordinates inline — no dependency on localization template format
+      if (ref?.roomPt != null) {
+        const px = Math.round(ref.roomPt.x);
+        const py = Math.round(ref.roomPt.y);
+        const baseMsg = this._L(isA ? "yaw.ref_a_marked" : "yaw.ref_b_marked");
+        // Replace {x}/{y} if present; otherwise append coordinates
+        if (baseMsg.includes("{x}")) {
+          sub = baseMsg.replace("{x}", String(px)).replace("{y}", String(py));
+        } else {
+          sub = `(X=${px}, Y=${py} cm) — ${this._L(isA ? "yaw.ref_a_idle" : "yaw.ref_b_step")}`;
+        }
+      } else {
+        sub = this._L(isA ? "yaw.ref_a_marked" : "yaw.ref_b_marked")
+               .replace("{x}", "?").replace("{y}", "?");
+      }
     } else if (rel === 0) {
       sub = this._L(isA ? "yaw.ref_a_idle" : "yaw.ref_b_step");
     } else {

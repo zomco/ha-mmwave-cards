@@ -244,41 +244,48 @@ export function drawRadarFov(
     ctx.arc(cx, cy, r_inner, base + halfFov, base - halfFov, true);    // inner arc, CCW
     ctx.closePath();                                                     // left radial
 
-    ctx.fillStyle   = fillColor;   ctx.fill();
+    ctx.fillStyle   = fillColor;
+    ctx.fill("evenodd");          // evenodd rule: inner arc hole is correctly excluded
     ctx.strokeStyle = strokeColor; ctx.lineWidth = strokeW; ctx.stroke();
   };
 
-  // ── Draw zones ─────────────────────────────────────────────────────────────
+  // ── Draw zones (outer first so inner overdraws) ────────────────────────────
 
   if (vitalRangeM != null && vitalRangeM > minRangeM && vitalRangeM < maxRangeM) {
     const vitalR = toPx(vitalRangeM);
 
-    // Outer zone (presence / sleep): vitalRange → maxRange  — dim grey-blue
+    // Outer zone (presence / sleep): vitalRange → maxRange  — dim cyan-blue
     drawAnnulus(vitalR, maxR,
-      "rgba(100,181,246,.10)",   // fill
-      "rgba(100,181,246,.35)",   // stroke
+      "rgba(100,181,246,.18)",   // fill
+      "rgba(100,181,246,.45)",   // stroke
     );
 
     // Inner zone (breath / HR): minRange → vitalRange  — bright blue
     drawAnnulus(minR, vitalR,
-      "rgba(100,181,246,.25)",   // fill
-      "rgba(100,181,246,.70)",   // stroke
+      "rgba(100,181,246,.40)",   // fill  ← higher contrast
+      "rgba(100,181,246,.85)",   // stroke
       1.5,
     );
   } else {
     // Single zone fallback
     drawAnnulus(minR, maxR,
-      "rgba(100,181,246,.18)",
-      "rgba(100,181,246,.55)",
-    );
+      "rgba(100,181,246,.32)",
+      "rgba(100,181,246,.70)");
   }
 
-  // ── Blind zone boundary (dashed arc at minRange) ─────────────────────────
+  // ── Blind zone: dark overlay (center → minR) so it looks invalid ──────────
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, minR, base - halfFov, base + halfFov, false);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(0,0,0,.50)";   // semi-transparent dark cover
+  ctx.fill();
 
+  // Dashed red arc = minRange boundary
   ctx.beginPath();
   ctx.arc(cx, cy, minR, base - halfFov, base + halfFov, false);
-  ctx.strokeStyle = "rgba(244,99,99,.55)";
-  ctx.lineWidth   = 1.2;
+  ctx.strokeStyle = "rgba(244,99,99,.80)";
+  ctx.lineWidth   = 1.5;
   ctx.setLineDash([3, 3]);
   ctx.stroke();
   ctx.setLineDash([]);

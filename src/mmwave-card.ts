@@ -47,7 +47,7 @@ import type { LivePanel } from "./panels/live-panel";
   name:             "MMWave Radar Card",
   description:      "Multi-model mmWave radar calibration & live visualization",
   preview:          true,
-  documentationURL: "https://github.com/zomco/ha-mmwave-card",
+  documentationURL: "https://github.com/YOUR_GITHUB_USERNAME/lovelace-mmwave-card",
 });
 
 console.info(
@@ -262,7 +262,9 @@ export class MMWaveCard extends LitElement {
             <mmwave-geo-panel
               .adapter=${this._adapter}
               .calibration=${this._cal}
-              .lang=${lang}>
+              .lang=${lang}
+              .roomW=${roomW}
+              .roomD=${roomD}>
             </mmwave-geo-panel>` : nothing}
 
           ${this._tab === TAB_YAW ? html`

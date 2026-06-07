@@ -1,0 +1,268 @@
+# =============================================================================
+# MMWave Radar Card — 完整 Lovelace 仪表板示例
+# =============================================================================
+#
+# 使用方式:
+#   在 Home Assistant 中：设置 → 仪表板 → 添加仪表板 → 选择"YAML 模式"
+#   或将本文件复制到 <config>/ui-lovelace.yaml 并在 configuration.yaml 中添加:
+#     lovelace:
+#       mode: yaml
+#       resources:
+#         - url: /local/mmwave-card.js
+#           type: module
+#
+# 前提条件:
+#   1. mmwave-card.js 已安装（HACS 或手动复制到 /config/www/）
+#   2. Lovelace 资源中已注册 /local/mmwave-card.js（type: module）
+#   3. ESPHome 组件已接入 HA，相关实体可用
+#
+# 修改方法:
+#   将所有 entity_id（如 binary_sensor.r60abd1_presence）替换为你的实际实体 ID。
+#   在 HA 开发者工具 → 状态 中可以查找实体 ID。
+# =============================================================================
+
+title: MMWave 雷达监控
+
+views:
+
+# =============================================================================
+# 视图 1：R60ABD1 呼吸睡眠雷达（60 GHz）
+# =============================================================================
+  - title: R60ABD1
+    icon: mdi:radar
+    path: r60abd1
+    cards:
+
+      # ── 雷达校准卡片（必需）────────────────────────────────────────────────
+      #
+      # 三个标签页：
+      #   ① 几何 & 边界  — 填写安装参数，绘制房间边界
+      #   ② 偏航校准     — 两点几何法确定朝向
+      #   ③ 实时验证     — 实时俯视图，验证校准结果
+      #
+      # 校准数据保存在浏览器 localStorage（key: mmwave_cal_v1_r60abd1）
+      # 点击「保存」同时将参数写入以下 input_number 实体（如已定义）:
+      #   input_number.r60abd1_radar_x
+      #   input_number.r60abd1_radar_y
+      #   input_number.r60abd1_yaw
+      #   input_number.r60abd1_radar_height
+      #
+      - type: custom:mmwave-card
+        radar_model: r60abd1
+
+        # ── 必填实体 ──────────────────────────────────────────────────────────
+        presence_entity: binary_sensor.r60abd1_presence   # 有人/无人
+        x_entity:        sensor.r60abd1_x                 # 雷达局部 X（cm）
+        y_entity:        sensor.r60abd1_y                 # 雷达局部 Y（cm）
+
+        # ── 可选实体（填写后在实时视图中显示离地高度）────────────────────────
+        z_entity:      sensor.r60abd1_z                   # 雷达局部 Z（cm）
+
+        # ── 可选实体（呼吸/心率/睡眠，供 HA 自动化使用）─────────────────────
+        # 注意：这些实体目前不在卡片画布中显示，
+        # 而是通过适配器暴露给 HA，可用于触发自动化。
+        breath_entity: sensor.r60abd1_breath_value        # 呼吸频率（次/min）
+        heart_entity:  sensor.r60abd1_heart_rate          # 心率（bpm）
+        sleep_entity:  sensor.r60abd1_sleep_state         # 睡眠状态（文本）
+
+        # ── 房间尺寸（仅影响画布比例，不影响校准精度）──────────────────────
+        room_w: 400    # 房间宽度（cm），X 轴方向
+        room_d: 350    # 房间深度（cm），Y 轴方向
+
+      # ── 状态总览卡片 ─────────────────────────────────────────────────────────
+      - type: entities
+        title: R60ABD1 实时状态
+        entities:
+          - entity: binary_sensor.r60abd1_presence
+            name: 存在检测
+            icon: mdi:account-check
+          - entity: sensor.r60abd1_x
+            name: 原始 X（cm）
+          - entity: sensor.r60abd1_y
+            name: 原始 Y（cm）
+          - entity: sensor.r60abd1_z
+            name: 原始 Z（cm）
+          - entity: sensor.r60abd1_body_distance
+            name: 目标距离（cm）
+          - entity: sensor.r60abd1_breath_value
+            name: 呼吸频率
+          - entity: sensor.r60abd1_heart_rate
+            name: 心率
+
+      # ── 睡眠监测卡片（R60ABD1 专有）─────────────────────────────────────────
+      - type: entities
+        title: 睡眠监测
+        entities:
+          - entity: binary_sensor.r60abd1_in_bed
+            name: 在床状态
+            icon: mdi:bed
+          - entity: sensor.r60abd1_sleep_state
+            name: 睡眠阶段
+            icon: mdi:sleep
+          - entity: sensor.r60abd1_awake_duration
+            name: 清醒时长（min）
+          - entity: sensor.r60abd1_light_sleep_duration
+            name: 浅睡时长（min）
+          - entity: sensor.r60abd1_deep_sleep_duration
+            name: 深睡时长（min）
+          - entity: sensor.r60abd1_sleep_score
+            name: 睡眠评分（0-100）
+          - entity: sensor.r60abd1_sleep_quality
+            name: 睡眠质量
+
+      # ── 历史图表：呼吸 & 心率 ─────────────────────────────────────────────
+      - type: history-graph
+        title: 呼吸 & 心率趋势
+        hours_to_show: 8
+        entities:
+          - entity: sensor.r60abd1_breath_value
+            name: 呼吸（次/min）
+          - entity: sensor.r60abd1_heart_rate
+            name: 心率（bpm）
+
+      # ── 校准参数只读显示（由校准卡片写入）───────────────────────────────────
+      - type: entities
+        title: 当前校准参数
+        show_header_toggle: false
+        entities:
+          - entity: input_number.r60abd1_radar_x
+            name: 雷达 X 位置（cm）
+          - entity: input_number.r60abd1_radar_y
+            name: 雷达 Y 位置（cm）
+          - entity: input_number.r60abd1_radar_height
+            name: 安装高度（cm）
+          - entity: input_number.r60abd1_yaw
+            name: 偏航角（°）
+
+# =============================================================================
+# 视图 2：LD2450 存在雷达（24 GHz，最多 3 目标）
+# =============================================================================
+  - title: LD2450
+    icon: mdi:radar
+    path: ld2450
+    cards:
+
+      # ── 雷达校准卡片 ─────────────────────────────────────────────────────────
+      #
+      # LD2450 特点：
+      #   - 最多同时追踪 3 个目标（在实时视图中分别显示 1/2/3 标签）
+      #   - 无 Z 轴，离地高度显示栏隐藏
+      #   - 坐标单位为 mm（适配器已自动转换为 cm）
+      #   - 更新率约 20 Hz，实时视图响应更快
+      #
+      - type: custom:mmwave-card
+        radar_model: ld2450
+
+        # ── 必填实体 ──────────────────────────────────────────────────────────
+        presence_entity: binary_sensor.ld2450_presence
+        target1_x:       sensor.ld2450_target_1_x
+        target1_y:       sensor.ld2450_target_1_y
+
+        # ── 可选实体：目标 2、3 ───────────────────────────────────────────────
+        target2_x:       sensor.ld2450_target_2_x
+        target2_y:       sensor.ld2450_target_2_y
+        target3_x:       sensor.ld2450_target_3_x
+        target3_y:       sensor.ld2450_target_3_y
+
+        # ── 房间尺寸 ──────────────────────────────────────────────────────────
+        room_w: 500
+        room_d: 400
+
+      # ── 状态总览 ──────────────────────────────────────────────────────────────
+      - type: entities
+        title: LD2450 实时状态
+        entities:
+          - entity: binary_sensor.ld2450_presence
+            name: 存在检测
+          - entity: sensor.ld2450_target_1_x
+            name: 目标 1 X（mm）
+          - entity: sensor.ld2450_target_1_y
+            name: 目标 1 Y（mm）
+          - entity: sensor.ld2450_target_2_x
+            name: 目标 2 X（mm）
+          - entity: sensor.ld2450_target_2_y
+            name: 目标 2 Y（mm）
+          - entity: sensor.ld2450_target_3_x
+            name: 目标 3 X（mm）
+          - entity: sensor.ld2450_target_3_y
+            name: 目标 3 Y（mm）
+
+# =============================================================================
+# 视图 3：自动化示例（参考用，不依赖卡片运行）
+# =============================================================================
+  - title: 自动化示例
+    icon: mdi:home-automation
+    path: automation-examples
+    cards:
+
+      - type: markdown
+        title: 自动化使用说明
+        content: |
+          ## 如何在自动化中使用雷达数据
+
+          校准卡片会将变换后的房间坐标写入 `sensor.r60abd1_x` / `sensor.r60abd1_y`（由 ESPHome 组件提供原始值，坐标变换在 ESPHome 固件侧完成）。
+
+          以下是常用自动化模式的示例触发器和条件写法。
+
+      - type: entities
+        title: 自动化相关实体快速查看
+        entities:
+          - entity: binary_sensor.r60abd1_presence
+          - entity: binary_sensor.r60abd1_in_bed
+          - entity: sensor.r60abd1_sleep_state
+          - entity: sensor.r60abd1_sleep_score
+          - entity: sensor.r60abd1_breath_value
+          - entity: sensor.r60abd1_heart_rate
+
+      - type: markdown
+        title: 示例自动化 YAML（复制到自动化编辑器）
+        content: |
+          ```yaml
+          # 示例 1：入睡后自动关灯
+          alias: 检测到深睡关灯
+          trigger:
+            - platform: state
+              entity_id: sensor.r60abd1_sleep_state
+              to: "deep"
+          condition:
+            - condition: state
+              entity_id: binary_sensor.r60abd1_in_bed
+              state: "on"
+          action:
+            - service: light.turn_off
+              target:
+                area_id: bedroom
+
+          ---
+
+          # 示例 2：呼吸过低报警
+          alias: 呼吸过低通知
+          trigger:
+            - platform: numeric_state
+              entity_id: sensor.r60abd1_breath_value
+              below: 10
+              for:
+                minutes: 2
+          condition:
+            - condition: state
+              entity_id: binary_sensor.r60abd1_in_bed
+              state: "on"
+          action:
+            - service: notify.mobile_app
+              data:
+                title: 健康提醒
+                message: "检测到呼吸过低，当前 {{ states('sensor.r60abd1_breath_value') }} 次/min"
+
+          ---
+
+          # 示例 3：LD2450 有人进入特定区域（需在 ESPHome 侧实现边界判断后暴露实体）
+          alias: 检测到有人进入工作区
+          trigger:
+            - platform: state
+              entity_id: binary_sensor.ld2450_presence
+              to: "on"
+          action:
+            - service: light.turn_on
+              target:
+                entity_id: light.desk_lamp
+          ```

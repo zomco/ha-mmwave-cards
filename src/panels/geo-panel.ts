@@ -28,8 +28,10 @@ export class GeoPanel extends LitElement {
   // ── aspect-ratio canvas height ─────────────────────────────────────────────
 
   private _cssH(): number {
-    const W = this._cv?.offsetWidth || 400;
-    return Math.max(140, Math.min(320, Math.round(W * this.roomD / this.roomW)));
+    const W = this._cv?.offsetWidth;
+    if (!W || W === 0) return 280;   // not yet laid out
+    const ratio = this.roomD / this.roomW;
+    return Math.max(140, Math.min(280, Math.round(W * ratio)));
   }
 
   // ── metrics (CSS-pixel space) ──────────────────────────────────────────────
