@@ -1,7 +1,7 @@
-# MMWave Radar Card
+# MMWave Radar HA Card(WIP)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/zomco/ha-mmwave-card.svg)](https://github.com/zomco/ha-mmwave-card/releases)
+[![GitHub Release](https://img.shields.io/github/release/zomco/mmwave-card.svg)](https://github.com/zomco/mmwave-card/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Multi-model millimeter-wave radar calibration & live visualization card for [Home Assistant](https://www.home-assistant.io/).
@@ -55,13 +55,13 @@ Adding a new model requires only creating one file — see [Adding a New Model](
 
 ### Via HACS (recommended)
 
-[![Open your Home Assistant instance and open a repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=zomco&repository=ha-mmwave-card&category=plugin)
+[![Open your Home Assistant instance and open a repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=zomco&repository=mmwave-card&category=plugin)
 
 Or: **HACS → Frontend → ⋮ → Custom repositories** → add this repo URL → category **Lovelace**.
 
 ### Manual
 
-1. Download `mmwave-card.js` from the [latest release](https://github.com/zomco/ha-mmwave-card/releases/latest).
+1. Download `mmwave-card.js` from the [latest release](https://github.com/zomco/mmwave-card/releases/latest).
 2. Copy to `<config>/www/mmwave-card.js`.
 3. **Settings → Dashboards → ⋮ → Resources** → add `/local/mmwave-card.js` (type: module).
 
@@ -181,8 +181,8 @@ That's all. The editor model picker, all three panels, and the calibration stora
 ## Building from Source
 
 ```bash
-git clone https://github.com/zomco/ha-mmwave-card.git
-cd ha-mmwave-card
+git clone https://github.com/zomco/mmwave-card.git
+cd mmwave-card
 npm install
 npm run build      # → dist/mmwave-card.js
 npm start          # watch mode
@@ -194,7 +194,7 @@ Requires Node.js ≥ 18.
 
 ## Related
 
-- [ESPHome R60ABD1 Component](https://github.com/zomco/esphome-r60abd1)
+- [ESPHome R60ABD1 Component](https://github.com/zomco/mmwave-component)
 
 ---
 

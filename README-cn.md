@@ -1,4 +1,4 @@
-# MMWave Radar Card 使用指南
+# MMWave Radar HA Card 使用指南
 
 ## 目录
 
@@ -19,7 +19,7 @@
 
 1. HACS → Frontend → ⋮ → 自定义仓库
 2. 填入 `https://github.com/YOUR_GITHUB_USERNAME/lovelace-mmwave-card`，类别选 **Lovelace**
-3. 搜索 **MMWave Radar Card** → 下载
+3. 搜索 **MMWave Radar HA Card** → 下载
 4. 刷新浏览器
 
 HACS 会自动在 Lovelace 资源中注册，无需手动操作。

@@ -1,5 +1,5 @@
 {
-  "name": "ha-mmwave-card",
+  "name": "mmwave-card",
   "version": "1.0.0",
   "description": "Multi-model mmWave radar calibration & visualization card for Home Assistant",
   "keywords": [
@@ -13,7 +13,7 @@
     "hacs"
   ],
   "module": "dist/mmwave-card.js",
-  "repository": "git@github.com:zomco/ha-mmwave-card.git",
+  "repository": "git@github.com:zomco/mmwave-card.git",
   "author": "Zach Fung <zomcoo@gmail.com>",
   "license": "MIT",
   "main": "dist/mmwave-card.js",

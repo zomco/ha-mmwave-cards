@@ -1,5 +1,5 @@
 /**
- * MMWave Radar Card  —  main orchestrator
+ * MMWave Radar HA Card  —  main orchestrator
  *
  * Responsibilities:
  *   1. Read radar_model from config, look up the adapter in the registry
@@ -44,7 +44,7 @@ import type { LivePanel } from "./panels/live-panel";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).customCards.push({
   type:             CARD_TAG,
-  name:             "MMWave Radar Card",
+  name:             "MMWave Radar HA Card",
   description:      "Multi-model mmWave radar calibration & live visualization",
   preview:          true,
   documentationURL: "https://github.com/YOUR_GITHUB_USERNAME/lovelace-mmwave-card",

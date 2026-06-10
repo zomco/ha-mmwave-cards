@@ -1,5 +1,5 @@
 {
-  "card_name": "MMWave Radar Card",
+  "card_name": "MMWave Radar HA Card",
   "tabs": {
     "geo": "① Geometry & Boundary",
     "yaw": "② Yaw Calibration",

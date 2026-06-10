@@ -18,7 +18,7 @@ yarn lint
 
 ### Primary files
 
-- `src/boilerplate-card.ts` — main card implementation
+- `src/mmwave-card.ts` — main card implementation
 - `src/editor.ts` — visual editor (`LovelaceCardEditor`)
 - `src/types.ts` — card config and type definitions
 - `src/action-handler-directive.ts` — tap/hold/double-tap directive
@@ -28,7 +28,7 @@ yarn lint
 
 ## Architecture and patterns
 
-- The custom element is `custom:boilerplate-card`.
+- The custom element is `custom:mmwave-card`.
 - Prefer Lit 3 patterns and idiomatic web component structure.
 - Keep configuration shape centralized in `src/types.ts`.
 - Keep editor schema and defaults aligned with runtime card behavior.
